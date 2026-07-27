@@ -1,29 +1,217 @@
+import { load } from "cheerio"
+
+import { API_CONFIG } from "@/shared/constants/api"
 import { STORE_SLUGS } from "@/shared/constants/stores"
-import type { Price, Product, Provider, StoreProvider } from "@/shared/types"
+import type { Price, Product, Provider, StoreProvider, StoreSearchHit } from "@/shared/types"
+import { buildProductSlug, parseProductSlug } from "@/shared/utils/product-slug"
+
+const BASE_URL = "https://thotcomputacion.com.uy"
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+
+/** Extrae el slug real de Thot de una URL de producto tipo /producto/<slug>/ */
+function extractSlugFromProductUrl(url: string): string | null {
+  const match = /\/producto\/([^/]+)\/?/.exec(url)
+  return match ? match[1] : null
+}
+
+/** "US$1,234.56" → 1234.56. Asume el formato de precio de Thot (punto decimal). */
+function parsePriceAmount(text: string): number | null {
+  const cleaned = text.replace(/[^\d.,]/g, "").replace(/,/g, "")
+  const amount = Number.parseFloat(cleaned)
+  return Number.isFinite(amount) ? amount : null
+}
 
 /**
- * Integración con Thot. Sin lógica real todavía: cada método queda como
- * stub hasta implementar el scraping/llamada real a esta tienda.
+ * Thot muestra "US$X" para dólares y "$X" (sin "US") para pesos uruguayos.
+ * Acepta también un código ISO ya limpio (ej. viniendo del JSON-LD).
+ */
+function normalizeCurrency(hint: string): string {
+  if (hint.includes("US$") || hint.trim().toUpperCase() === "USD") return "USD"
+  if (hint.includes("$")) return "UYU"
+  return "USD"
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null
+}
+
+interface ProductOffer {
+  amount: number
+  currency: string
+}
+
+/**
+ * Una ficha de producto de Thot trae varios `<script type="application/ld+json">`:
+ * el de Yoast SEO (WebPage/Organization/... dentro de un array "@graph") y
+ * el nativo de WooCommerce, que es directamente un objeto `{"@type":"Product",...}`.
+ * Esta función soporta ambas formas.
+ */
+function findProductNode(document: unknown): Record<string, unknown> | null {
+  const record = asRecord(document)
+  if (!record) return null
+  if (record["@type"] === "Product") return record
+
+  const graphNodes = record["@graph"]
+  if (!Array.isArray(graphNodes)) return null
+
+  return graphNodes.map((node) => asRecord(node)).find((node) => node?.["@type"] === "Product") ?? null
+}
+
+/**
+ * Extrae nombre, imagen y precio del primer Offer de un nodo schema.org
+ * Product ya localizado. Devuelve null si le faltan campos esperados (la
+ * ficha cambió o no cargó bien).
+ */
+function extractProductDetails(
+  productNode: Record<string, unknown>
+): { name: string; imageUrl: string | null; offer: ProductOffer } | null {
+  const name = typeof productNode.name === "string" ? productNode.name : null
+  const imageUrl = typeof productNode.image === "string" ? productNode.image : null
+
+  const offersValue = productNode.offers
+  const offer = asRecord(Array.isArray(offersValue) ? offersValue[0] : offersValue)
+  const priceSpecValue = offer?.priceSpecification
+  const priceSpec = asRecord(Array.isArray(priceSpecValue) ? priceSpecValue[0] : priceSpecValue)
+
+  const amount =
+    typeof priceSpec?.price === "string" || typeof priceSpec?.price === "number"
+      ? Number.parseFloat(String(priceSpec.price))
+      : null
+  const currency = typeof priceSpec?.priceCurrency === "string" ? priceSpec.priceCurrency : "USD"
+
+  if (!name || amount === null || !Number.isFinite(amount)) return null
+
+  return { name, imageUrl, offer: { amount, currency } }
+}
+
+/**
+ * Integración real con Thot Computación (WordPress + WooCommerce, tema
+ * Porto). Server-rendered, sin JS necesario. robots.txt solo restringe
+ * /wp-admin/ (y permite explícitamente admin-ajax.php) — búsqueda y fichas
+ * de producto están permitidas.
  */
 export class ThotProvider implements StoreProvider {
   readonly metadata: Provider = {
     id: "thot-provider",
     storeSlug: STORE_SLUGS.thot,
-    displayName: "Thot",
+    displayName: "Thot Computación",
   }
 
   async fetchProducts(): Promise<Product[]> {
-    // TODO: implementar integración real con Thot.
+    // Sin fuente de datos propia: no tiene sentido traer el catálogo completo todavía.
     return []
   }
 
-  async fetchPrice(_productId: string): Promise<Price | null> {
-    // TODO: implementar integración real con Thot.
+  async fetchPrice(): Promise<Price | null> {
     return null
   }
 
-  async searchProducts(_query: string): Promise<Product[]> {
-    // TODO: implementar integración real con Thot.
-    return []
+  async searchProducts(query: string): Promise<StoreSearchHit[]> {
+    const html = await this.fetchHtml(
+      `${BASE_URL}/?s=${encodeURIComponent(query)}&post_type=product`
+    )
+    if (!html) return []
+
+    const $ = load(html)
+    const hits: StoreSearchHit[] = []
+
+    $("ul.products > li.product").each((_, element) => {
+      const item = $(element)
+      const link = item.find("a.product-loop-title").first()
+      const url = link.attr("href")
+      const name = link.find("h3").first().text().trim()
+      const priceText = item.find(".price").first().text()
+
+      if (!url || !name) return
+      const realSlug = extractSlugFromProductUrl(url)
+      const amount = parsePriceAmount(priceText)
+      if (!realSlug || amount === null) return
+
+      const image = item.find("img").first()
+      const imageUrl = image.attr("data-src") || image.attr("src") || null
+
+      hits.push(
+        this.buildHit(realSlug, name, amount, priceText, imageUrl?.startsWith("data:") ? null : imageUrl)
+      )
+    })
+
+    return hits
+  }
+
+  async fetchProductBySlug(slug: string): Promise<StoreSearchHit | null> {
+    const realSlug = parseProductSlug(slug)?.realSlug ?? slug
+    const html = await this.fetchHtml(`${BASE_URL}/producto/${realSlug}/`)
+    if (!html) return null
+
+    const $ = load(html)
+    let productNode: Record<string, unknown> | null = null
+
+    $('script[type="application/ld+json"]').each((_, element) => {
+      if (productNode) return
+      try {
+        productNode = findProductNode(JSON.parse($(element).text()))
+      } catch {
+        // Script mal formado o no-JSON: se ignora y se sigue con el próximo.
+      }
+    })
+    if (!productNode) return null
+
+    const parsed = extractProductDetails(productNode)
+    if (!parsed) return null
+
+    return this.buildHit(realSlug, parsed.name, parsed.offer.amount, parsed.offer.currency, parsed.imageUrl)
+  }
+
+  private buildHit(
+    realSlug: string,
+    name: string,
+    amount: number,
+    currencyHint: string,
+    imageUrl: string | null
+  ): StoreSearchHit {
+    const productId = buildProductSlug(this.metadata.storeSlug, realSlug)
+    const currency = normalizeCurrency(currencyHint)
+
+    const product: Product = {
+      id: productId,
+      slug: productId,
+      name,
+      brand: null,
+      category: "Electrónica",
+      imageUrl,
+      unit: "",
+      sourceUrl: `${BASE_URL}/producto/${realSlug}/`,
+    }
+
+    const price: Price = {
+      id: `${productId}-price`,
+      productId,
+      storeId: this.metadata.id,
+      amount,
+      currency,
+      capturedAt: new Date().toISOString(),
+    }
+
+    return { product, price }
+  }
+
+  private async fetchHtml(url: string): Promise<string | null> {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), API_CONFIG.timeoutMs)
+
+    try {
+      const response = await fetch(url, {
+        headers: { "User-Agent": USER_AGENT },
+        signal: controller.signal,
+        next: { revalidate: API_CONFIG.revalidateSeconds },
+      })
+      if (!response.ok) return null
+      return await response.text()
+    } catch {
+      return null
+    } finally {
+      clearTimeout(timeout)
+    }
   }
 }

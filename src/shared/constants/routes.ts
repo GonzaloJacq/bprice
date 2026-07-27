@@ -9,5 +9,7 @@ export const APP_ROUTES = {
   storeDetail: (slug: string) => `/stores/${slug}`,
   products: "/products",
   productDetail: (slug: string) => `/products/${slug}`,
+  productCompare: (slug: string) => `/products/${slug}/compare`,
+  productHistory: (slug: string) => `/products/${slug}/history`,
   search: "/search",
 } as const

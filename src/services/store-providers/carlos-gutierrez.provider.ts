@@ -1,9 +1,15 @@
 import { STORE_SLUGS } from "@/shared/constants/stores"
-import type { Price, Product, Provider, StoreProvider } from "@/shared/types"
+import type { Price, Product, Provider, StoreProvider, StoreSearchHit } from "@/shared/types"
 
 /**
- * Integración con Carlos Gutiérrez. Sin lógica real todavía: cada método
- * queda como stub hasta implementar el scraping/llamada real a esta tienda.
+ * Integración con Carlos Gutiérrez. Sin lógica real todavía.
+ *
+ * Investigación (2026-07-26): tienda de electrodomésticos/TVs. Es una SPA
+ * en React (desarrollada por Xmartlabs) — el catálogo se carga por una API
+ * que todavía no se localizó en las requests observadas (solo se vieron
+ * assets estáticos). robots.txt vacío (sin restricciones declaradas).
+ * Pendiente de investigar el endpoint real de catálogo/búsqueda en una
+ * iteración futura.
  */
 export class CarlosGutierrezProvider implements StoreProvider {
   readonly metadata: Provider = {
@@ -22,8 +28,13 @@ export class CarlosGutierrezProvider implements StoreProvider {
     return null
   }
 
-  async searchProducts(_query: string): Promise<Product[]> {
+  async searchProducts(_query: string): Promise<StoreSearchHit[]> {
     // TODO: implementar integración real con Carlos Gutiérrez.
     return []
+  }
+
+  async fetchProductBySlug(_slug: string): Promise<StoreSearchHit | null> {
+    // TODO: implementar integración real con Carlos Gutiérrez.
+    return null
   }
 }

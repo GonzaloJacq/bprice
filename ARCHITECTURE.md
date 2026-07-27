@@ -12,9 +12,10 @@ constants → Repository → Server Action ("use server") → TanStack Query Hoo
 ```
 
 - **constants**: valores fijos de la feature (query keys, cache tags, límites).
-- **Repository**: única capa que sabe de dónde vienen los datos (hoy: providers
-  stub en `src/services/store-providers`; mañana: DB, API propia, etc.). Nada
-  fuera del repository debe saber cómo se obtienen los datos.
+- **Repository**: única capa que sabe de dónde vienen los datos (hoy:
+  providers en `src/services/store-providers` — algunos reales, la mayoría
+  todavía stub; mañana: DB propia, etc.). Nada fuera del repository debe
+  saber cómo se obtienen los datos.
 - **Server Action**: `"use server"`, es la única forma en que un componente
   cliente dispara una operación de servidor. Llama al repository, nunca al
   revés.
@@ -45,48 +46,61 @@ components/
                 Section, Container, Logo, ThemeToggle, AdSlot).
   layout/       Header, Footer.
 features/       Un directorio por dominio (ver "Anatomía de una feature").
+                stores, search, products.
 hooks/          Hooks genéricos no ligados a ninguna feature (ej. use-mounted).
 providers/      Providers de React de la app (QueryProvider, ThemeProvider).
                 No confundir con los "store providers" de services/.
 repositories/   Contrato base (`Repository<T, TId>`) que implementan los
                 repositories de cada feature.
 services/
-  store-providers/   Integraciones por tienda (Banifox, Loi, Thot,
-                      Carlos Gutiérrez, Tienda Inglesa), todas implementando
-                      la interfaz `StoreProvider`. Hoy son stubs sin lógica
-                      real ni llamadas reales.
+  store-providers/   Integraciones por tienda (Banifox, Loi, Thot
+                      Computación, Carlos Gutiérrez, Tienda Inglesa), todas
+                      implementando `StoreProvider`. Estado real por tienda:
+                      ver comentario al inicio de cada archivo — hoy solo
+                      Thot Computación tiene scraping real (WooCommerce,
+                      HTML + JSON-LD); el resto documenta por qué sigue
+                      stub (Cloudflare, SPA sin API localizada, GeneXus,
+                      restricción de robots.txt).
 shared/
   constants/    api.ts, routes.ts, stores.ts, config.ts — constantes globales.
   types/        Interfaces de dominio: Store, Product, Price, PriceHistory,
-                SearchResult, Provider/StoreProvider.
+                SearchResult, Provider/StoreProvider/StoreSearchHit.
   lib/          cn(), query-client (factory de QueryClient), metadata
                 (helper de SEO/Metadata API).
-  utils/        Funciones puras (formateo de moneda, fechas, etc.).
+  utils/        Funciones puras (formateo de moneda, fechas, slugs de
+                producto namespaced por tienda, etc.).
 ```
 
 ## Anatomía de una feature
 
-`features/stores/` es la feature de referencia — cablea el flujo completo
-(sin UI todavía) y es la plantilla exacta a copiar para `products`, `prices`
-o `search`:
+`features/stores/` fue la feature de referencia original. `features/search`
+y `features/products` siguen exactamente el mismo patrón, ya con datos
+reales:
 
 ```
-features/stores/
-  constants/
-    stores.constants.ts       # Query keys de TanStack Query
-  repositories/
-    store.repository.ts       # Implementa Repository<Store>, delega en
-                               # services/store-providers
-  actions/
-    get-stores.action.ts        # "use server"
-    get-store-by-slug.action.ts
-  hooks/
-    use-stores.ts              # useQuery
-    use-store.ts
-  components/                  # (no existe aún — acá va la UI de la feature
-                                #  cuando se implemente, consumiendo solo los
-                                #  hooks de arriba)
+features/search/
+  constants/search.constants.ts     # Query keys
+  repositories/search.repository.ts # Promise.allSettled sobre STORE_PROVIDERS
+  actions/search-products.action.ts # "use server"
+  hooks/use-search-products.ts      # useQuery
+  components/search-results.tsx     # Consume el hook; loading/empty/error
+                                     # con EmptyState/ErrorState/LoadingState
+
+features/products/
+  constants/products.constants.ts
+  repositories/product.repository.ts # Parsea el prefijo de tienda del slug
+                                      # y delega en STORE_PROVIDERS[slug]
+  actions/get-product.action.ts
+  hooks/use-product.ts
+  components/
+    product-detail.tsx    # Detalle
+    product-compare.tsx   # Comparación (hoy: 1 fila por producto, la
+                           # tienda con integración real)
 ```
+
+Los slugs de producto son namespaced por tienda (`<storeSlug>__<slugReal>`,
+ver `shared/utils/product-slug.ts`) para no colisionar cuando se sumen más
+integraciones reales.
 
 Para agregar una feature nueva: copiar esta estructura de carpetas, nunca
 saltar capas, y reusar los tipos de `shared/types` en vez de duplicarlos.
@@ -105,7 +119,18 @@ saltar capas, y reusar los tipos de `shared/types` en vez de duplicarlos.
 
 ## Estado actual
 
-Todo el código de esta primera pasada es **arquitectura pura**: interfaces,
-constants y stubs sin lógica real, sin scraping, sin llamadas reales, sin
-pantallas de feature. El objetivo es tener una base estable que no necesite
-reestructurarse a medida que se implementen features reales.
+- **Búsqueda y comparación son reales** para Thot Computación (`services/store-providers/thot.provider.ts`):
+  scraping server-side con `fetch` + `cheerio`, cacheado con
+  `next.revalidate` y con timeout. Banifox, Loi, Carlos Gutiérrez y Tienda
+  Inglesa siguen stub — cada archivo documenta por qué (plataforma,
+  dificultad técnica, y en el caso de Tienda Inglesa, una restricción
+  explícita de su robots.txt sobre `/busqueda` que se respeta).
+- No hay catálogo propio ni base de datos: cada búsqueda golpea a los
+  providers en vivo. Por eso Home no tiene "productos populares" fijos, y
+  la página de Historial muestra un estado vacío honesto en vez de datos
+  inventados — una serie de precios en el tiempo requeriría una capa de
+  persistencia (DB + scraping periódico) que todavía no existe.
+- Nada de esto rompe el flujo `constants → Repository → Server Action →
+  Hook → Componentes`: rellenar un stub con lógica real, o sumar una
+  feature nueva siguiendo el mismo patrón, es exactamente para lo que está
+  pensada esta arquitectura.

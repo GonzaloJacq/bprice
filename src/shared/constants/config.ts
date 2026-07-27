@@ -5,7 +5,7 @@
  */
 export const APP_CONFIG = {
   siteName: "BPrice",
-  siteDescription: "Comparador de precios de supermercados",
+  siteDescription: "Comparador de precios",
   defaultLocale: "es-UY",
   pagination: {
     defaultPageSize: 20,
