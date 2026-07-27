@@ -6,6 +6,7 @@ import { CarlosGutierrezProvider } from "./carlos-gutierrez.provider"
 import { LoiProvider } from "./loi.provider"
 import { ThotProvider } from "./thot.provider"
 import { TiendaInglesaProvider } from "./tienda-inglesa.provider"
+import { TiendamiaProvider } from "./tiendamia.provider"
 
 /**
  * Registro central de providers por tienda. Los repositories de features
@@ -17,6 +18,7 @@ export const STORE_PROVIDERS: Record<StoreSlug, StoreProvider> = {
   [STORE_SLUGS.thot]: new ThotProvider(),
   [STORE_SLUGS.carlosGutierrez]: new CarlosGutierrezProvider(),
   [STORE_SLUGS.tiendaInglesa]: new TiendaInglesaProvider(),
+  [STORE_SLUGS.tiendamia]: new TiendamiaProvider(),
 }
 
 export {
@@ -25,4 +27,5 @@ export {
   LoiProvider,
   ThotProvider,
   TiendaInglesaProvider,
+  TiendamiaProvider,
 }

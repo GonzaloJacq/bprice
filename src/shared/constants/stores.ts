@@ -9,6 +9,7 @@ export const STORE_SLUGS = {
   thot: "thot",
   carlosGutierrez: "carlos-gutierrez",
   tiendaInglesa: "tienda-inglesa",
+  tiendamia: "tiendamia",
 } as const
 
 export type StoreSlug = (typeof STORE_SLUGS)[keyof typeof STORE_SLUGS]
@@ -24,4 +25,5 @@ export const SUPPORTED_STORES: readonly SupportedStore[] = [
   { slug: STORE_SLUGS.thot, name: "Thot" },
   { slug: STORE_SLUGS.carlosGutierrez, name: "Carlos Gutiérrez" },
   { slug: STORE_SLUGS.tiendaInglesa, name: "Tienda Inglesa" },
+  { slug: STORE_SLUGS.tiendamia, name: "Tiendamia" },
 ]

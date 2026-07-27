@@ -54,8 +54,9 @@ repositories/   Contrato base (`Repository<T, TId>`) que implementan los
                 repositories de cada feature.
 services/
   store-providers/   Integraciones por tienda (Banifox, Loi, Thot
-                      Computación, Carlos Gutiérrez, Tienda Inglesa), todas
-                      implementando `StoreProvider`. Estado real por tienda:
+                      Computación, Carlos Gutiérrez, Tienda Inglesa,
+                      Tiendamia), todas implementando `StoreProvider`.
+                      Estado real por tienda:
                       ver comentario al inicio de cada archivo — hoy solo
                       Thot Computación tiene scraping real (WooCommerce,
                       HTML + JSON-LD); el resto documenta por qué sigue
@@ -121,10 +122,10 @@ saltar capas, y reusar los tipos de `shared/types` en vez de duplicarlos.
 
 - **Búsqueda y comparación son reales** para Thot Computación (`services/store-providers/thot.provider.ts`):
   scraping server-side con `fetch` + `cheerio`, cacheado con
-  `next.revalidate` y con timeout. Banifox, Loi, Carlos Gutiérrez y Tienda
-  Inglesa siguen stub — cada archivo documenta por qué (plataforma,
-  dificultad técnica, y en el caso de Tienda Inglesa, una restricción
-  explícita de su robots.txt sobre `/busqueda` que se respeta).
+  `next.revalidate` y con timeout. Banifox, Loi, Carlos Gutiérrez, Tienda
+  Inglesa y Tiendamia siguen stub — cada archivo documenta por qué
+  (plataforma, dificultad técnica, y en el caso de Tienda Inglesa y
+  Tiendamia, restricciones explícitas de su robots.txt que se respetan).
 - No hay catálogo propio ni base de datos: cada búsqueda golpea a los
   providers en vivo. Por eso Home no tiene "productos populares" fijos, y
   la página de Historial muestra un estado vacío honesto en vez de datos
