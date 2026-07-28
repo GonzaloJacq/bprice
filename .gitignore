@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# scripts de verificación descartables (spikes, pruebas manuales)
+.scratch/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

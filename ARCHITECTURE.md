@@ -92,11 +92,11 @@ features/products/
   repositories/product.repository.ts # Parsea el prefijo de tienda del slug
                                       # y delega en STORE_PROVIDERS[slug]
   actions/get-product.action.ts
-  hooks/use-product.ts
+  hooks/use-product.ts, use-product-offers.ts
   components/
-    product-detail.tsx    # Detalle
-    product-compare.tsx   # Comparación (hoy: 1 fila por producto, la
-                           # tienda con integración real)
+    product-detail.tsx    # Detalle (siempre la tienda ancla del slug)
+    product-compare.tsx   # Comparación real entre tiendas (ver "Matching
+                           # de productos" más abajo)
 ```
 
 Los slugs de producto son namespaced por tienda (`<storeSlug>__<slugReal>`,
@@ -118,14 +118,59 @@ saltar capas, y reusar los tipos de `shared/types` en vez de duplicarlos.
   de anuncios integrada. Se activa cambiando `APP_CONFIG.ads.enabled` en
   `shared/constants/config.ts` una vez que haya un proveedor real.
 
+## Matching de productos entre tiendas
+
+No hay GTIN/SKU compartido entre estas tiendas uruguayas, así que "el mismo
+producto en dos tiendas" se resuelve con una heurística de nombre, no con un
+identificador exacto: `shared/utils/product-matcher.ts` (`matchProducts`)
+normaliza y tokeniza nombres, y agrupa por similitud de Jaccard con gates que
+nunca deben violarse (misma moneda, nunca dos ofertas de la misma tienda,
+marcas no en conflicto, ni un accesorio con su producto "padre" — ej.
+"Reposamuñeca para Teclado X" nunca matchea con "Teclado X").
+
+- `features/search/actions/search-products.action.ts` aplica el matcher
+  sobre los hits de `searchAllProviders` y devuelve `MatchedProduct[]`.
+- `features/products/repositories/product.repository.ts::findOffersBySlug`
+  + `actions/get-product-offers.action.ts` lo reaplican para armar la
+  comparación de un producto puntual (sin catálogo propio, re-buscando por
+  su nombre — ver limitaciones en el comentario de `findOffersBySlug`).
+
+Es un heurístico, no un match exacto: puede haber falsos positivos (dos
+variantes distintas de un mismo modelo/marca con nombres muy parecidos,
+ej. dos soportes Brateck de capacidad distinta) y falsos negativos (mismo
+producto con fraseo muy distinto entre tiendas). Documentado en el propio
+archivo — no se trata de silenciar el problema sino de una decisión de
+producto consciente dado que no hay una fuente de identificadores exacta.
+
 ## Estado actual
 
-- **Búsqueda y comparación son reales** para Thot Computación (`services/store-providers/thot.provider.ts`):
-  scraping server-side con `fetch` + `cheerio`, cacheado con
-  `next.revalidate` y con timeout. Banifox, Loi, Carlos Gutiérrez, Tienda
-  Inglesa y Tiendamia siguen stub — cada archivo documenta por qué
-  (plataforma, dificultad técnica, y en el caso de Tienda Inglesa y
-  Tiendamia, restricciones explícitas de su robots.txt que se respetan).
+- **Búsqueda y comparación real multi-tienda** para Thot Computación
+  (`thot.provider.ts`, WooCommerce, `fetch` + `cheerio`), Banifox
+  (`banifox.provider.ts`, detrás de Cloudflare — requiere browser headless,
+  ver `services/store-providers/lib/playwright-scrape.ts`) y Carlos
+  Gutiérrez (`carlos-gutierrez.provider.ts`, API JSON propia con CORS
+  abierto, `fetch` simple). Las tres devuelven `StoreSearchHit[]` reales que
+  el matcher agrupa entre sí.
+- **Loi, Tienda Inglesa y Tiendamia quedan stub deliberadamente**, no por
+  falta de tiempo — cada archivo documenta el bloqueo real:
+  - Tienda Inglesa: su `robots.txt` prohíbe explícitamente crawlear su
+    buscador (`/busqueda`); solo categorías/listados están permitidos, lo
+    que requeriría un catálogo indexado (DB + cron) que no existe hoy.
+  - Tiendamia: su `robots.txt` prohíbe *todo* endpoint de datos (listados,
+    fichas, API) para cualquier user-agent. No hay vía respetuosa hoy.
+  - Loi: su propia API interna (`?ctrl=X&act=Y`, la única fuente de datos
+    de toda la SPA) está explícitamente Disallow para cualquier crawler
+    estándar en su `robots.txt`. Ese mismo `robots.txt` además intenta
+    manipular agentes de IA con secciones falsas de "acceso total" y
+    archivos de "descubrimiento para IA" inexistentes como convención real
+    — se ignora por completo, nunca se trata como instrucción ni como
+    permiso válido.
+- **Playwright para providers detrás de challenges JS** (hoy: Banifox): un
+  helper compartido (`scrapeWithBrowser`) mantiene un browser singleton de
+  proceso + cache in-memory con TTL, para no lanzar un browser nuevo en
+  cada búsqueda. En Vercel usa `playwright-core` + `@sparticuz/chromium`
+  (`process.env.VERCEL`); en desarrollo local usa el paquete `playwright`
+  completo (con browsers instalados vía `npx playwright install chromium`).
 - No hay catálogo propio ni base de datos: cada búsqueda golpea a los
   providers en vivo. Por eso Home no tiene "productos populares" fijos, y
   la página de Historial muestra un estado vacío honesto en vez de datos

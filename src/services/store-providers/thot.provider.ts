@@ -9,6 +9,15 @@ const BASE_URL = "https://thotcomputacion.com.uy"
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 
+/**
+ * El template de búsqueda de Thot solo muestra 3 productos por página (no
+ * los 12/24/36 configurables del listado normal), y una búsqueda amplia
+ * puede tener decenas de páginas. Paginamos hasta este tope para traer
+ * bastantes más resultados que la página 1 sin bombardear el sitio con
+ * cientos de requests por búsqueda.
+ */
+const MAX_SEARCH_PAGES = 8
+
 /** Extrae el slug real de Thot de una URL de producto tipo /producto/<slug>/ */
 function extractSlugFromProductUrl(url: string): string | null {
   const match = /\/producto\/([^/]+)\/?/.exec(url)
@@ -108,12 +117,43 @@ export class ThotProvider implements StoreProvider {
   }
 
   async searchProducts(query: string): Promise<StoreSearchHit[]> {
-    const html = await this.fetchHtml(
-      `${BASE_URL}/?s=${encodeURIComponent(query)}&post_type=product`
-    )
-    if (!html) return []
+    const searchUrl = (page: number) =>
+      page === 1
+        ? `${BASE_URL}/?s=${encodeURIComponent(query)}&post_type=product`
+        : `${BASE_URL}/page/${page}/?s=${encodeURIComponent(query)}&post_type=product`
 
-    const $ = load(html)
+    const firstHtml = await this.fetchHtml(searchUrl(1))
+    if (!firstHtml) return []
+
+    const firstPage = load(firstHtml)
+    const hits = this.parseSearchResults(firstPage)
+    const lastPage = Math.min(this.findLastPageNumber(firstPage), MAX_SEARCH_PAGES)
+
+    if (lastPage > 1) {
+      const extraPages = await Promise.all(
+        Array.from({ length: lastPage - 1 }, (_, index) => this.fetchHtml(searchUrl(index + 2)))
+      )
+      for (const html of extraPages) {
+        if (!html) continue
+        hits.push(...this.parseSearchResults(load(html)))
+      }
+    }
+
+    return hits
+  }
+
+  /** Mayor número de página visible en la paginación de WooCommerce (`.page-numbers`). */
+  private findLastPageNumber($: ReturnType<typeof load>): number {
+    let lastPage = 1
+    $(".page-numbers").each((_, element) => {
+      const text = $(element).text().trim()
+      const pageNumber = Number.parseInt(text, 10)
+      if (Number.isFinite(pageNumber) && pageNumber > lastPage) lastPage = pageNumber
+    })
+    return lastPage
+  }
+
+  private parseSearchResults($: ReturnType<typeof load>): StoreSearchHit[] {
     const hits: StoreSearchHit[] = []
 
     $("ul.products > li.product").each((_, element) => {

@@ -3,22 +3,17 @@
 import { EmptyState } from "@/components/shared/empty-state"
 import { ErrorState } from "@/components/shared/error-state"
 import { LoadingState } from "@/components/shared/loading-state"
-import { PriceTable } from "@/components/shared/price-table"
-import { useProduct } from "@/features/products/hooks/use-product"
-import { SUPPORTED_STORES } from "@/shared/constants/stores"
+import { PriceTable, type PriceTableRow } from "@/components/shared/price-table"
+import { useProductOffers } from "@/features/products/hooks/use-product-offers"
 import { parseProductSlug } from "@/shared/utils/product-slug"
+import { resolveStoreName } from "@/shared/utils/store"
 
 interface ProductCompareProps {
   slug: string
 }
 
-/**
- * Hoy siempre muestra una sola fila (la única tienda con integración real
- * es Thot Computación) — es correcto y esperado, no se fuerza a simular
- * más tiendas.
- */
 export function ProductCompare({ slug }: ProductCompareProps) {
-  const { data, isLoading, isError } = useProduct(slug)
+  const { data, isLoading, isError } = useProductOffers(slug)
 
   if (isLoading) {
     return <LoadingState rows={3} />
@@ -42,24 +37,15 @@ export function ProductCompare({ slug }: ProductCompareProps) {
     )
   }
 
-  const { product, price } = data
-  const storeSlug = parseProductSlug(product.slug)?.storeSlug
-  const storeName = SUPPORTED_STORES.find((store) => store.slug === storeSlug)?.name ?? "Tienda"
+  const rows: PriceTableRow[] = data.offers.map(({ product, price }, index) => ({
+    storeName: resolveStoreName(parseProductSlug(product.slug)?.storeSlug),
+    price: price.amount,
+    currency: price.currency,
+    stock: "in_stock",
+    updatedAt: price.capturedAt,
+    storeUrl: product.sourceUrl ?? undefined,
+    isBestPrice: index === 0,
+  }))
 
-  return (
-    <PriceTable
-      rows={[
-        {
-          storeName,
-          price: price.amount,
-          currency: price.currency,
-          stock: "in_stock",
-          updatedAt: price.capturedAt,
-          storeUrl: product.sourceUrl ?? undefined,
-        },
-      ]}
-      showUpdatedAt
-      showAction
-    />
-  )
+  return <PriceTable rows={rows} showUpdatedAt showAction />
 }

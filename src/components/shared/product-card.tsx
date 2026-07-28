@@ -11,6 +11,7 @@ interface ProductCardProps {
   slug: string
   name: string
   brand: string
+  imageUrl?: string | null
   minPrice: number
   currency: string
   storeCount: number
@@ -23,6 +24,7 @@ export function ProductCard({
   slug,
   name,
   brand,
+  imageUrl,
   minPrice,
   currency,
   storeCount,
@@ -34,8 +36,24 @@ export function ProductCard({
     <Link href={APP_ROUTES.productDetail(slug)} className="block h-full">
       <Card className={cn("h-full transition-colors hover:bg-muted/40", className)}>
         <CardContent className="flex flex-1 flex-col gap-4">
-          <div className="flex aspect-square items-center justify-center rounded-lg bg-muted">
-            <Package className="size-10 text-muted-foreground" strokeWidth={1.5} />
+          <div className="flex aspect-square items-center justify-center overflow-hidden rounded-lg bg-muted">
+            {imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- imágenes de dominios externos, uno por tienda
+              <img
+                src={imageUrl}
+                alt={name}
+                loading="lazy"
+                className="size-full object-contain"
+                onError={(event) => {
+                  event.currentTarget.style.display = "none"
+                  event.currentTarget.nextElementSibling?.classList.remove("hidden")
+                }}
+              />
+            ) : null}
+            <Package
+              className={cn("size-10 text-muted-foreground", imageUrl && "hidden")}
+              strokeWidth={1.5}
+            />
           </div>
           <div className="flex flex-col gap-1">
             <p className="text-xs text-muted-foreground">{brand}</p>

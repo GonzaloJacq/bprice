@@ -23,6 +23,7 @@ export interface PriceTableRow {
   stock: PriceTableStock
   updatedAt?: string
   storeUrl?: string
+  isBestPrice?: boolean
 }
 
 interface PriceTableProps {
@@ -68,7 +69,12 @@ export function PriceTable({ rows, showUpdatedAt, showAction }: PriceTableProps)
                 {row.storeName}
               </div>
             </TableCell>
-            <TableCell>{formatCurrency(row.price, row.currency)}</TableCell>
+            <TableCell>
+              <div className="flex items-center gap-2">
+                {formatCurrency(row.price, row.currency)}
+                {row.isBestPrice ? <Badge variant="secondary">Mejor precio</Badge> : null}
+              </div>
+            </TableCell>
             <TableCell>
               <Badge variant={STOCK_VARIANT[row.stock]}>{STOCK_LABEL[row.stock]}</Badge>
             </TableCell>

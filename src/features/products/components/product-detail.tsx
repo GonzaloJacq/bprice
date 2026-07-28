@@ -21,8 +21,9 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useProduct } from "@/features/products/hooks/use-product"
-import { SUPPORTED_STORES } from "@/shared/constants/stores"
+import { cn } from "@/shared/lib/utils"
 import { parseProductSlug } from "@/shared/utils/product-slug"
+import { resolveStoreName } from "@/shared/utils/store"
 
 interface ProductDetailProps {
   slug: string
@@ -54,14 +55,28 @@ export function ProductDetail({ slug }: ProductDetailProps) {
   }
 
   const { product, price } = data
-  const storeSlug = parseProductSlug(product.slug)?.storeSlug
-  const storeName = SUPPORTED_STORES.find((store) => store.slug === storeSlug)?.name ?? "Tienda"
+  const storeName = resolveStoreName(parseProductSlug(product.slug)?.storeSlug)
 
   return (
     <div className="flex flex-col gap-10">
       <div className="grid gap-8 lg:grid-cols-2">
-        <div className="flex aspect-square items-center justify-center rounded-xl bg-muted">
-          <Package className="size-24 text-muted-foreground" strokeWidth={1} />
+        <div className="flex aspect-square items-center justify-center overflow-hidden rounded-xl bg-muted">
+          {product.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- imágenes de dominios externos, uno por tienda
+            <img
+              src={product.imageUrl}
+              alt={product.name}
+              className="size-full object-contain"
+              onError={(event) => {
+                event.currentTarget.style.display = "none"
+                event.currentTarget.nextElementSibling?.classList.remove("hidden")
+              }}
+            />
+          ) : null}
+          <Package
+            className={cn("size-24 text-muted-foreground", product.imageUrl && "hidden")}
+            strokeWidth={1}
+          />
         </div>
 
         <div className="flex flex-col gap-6">
