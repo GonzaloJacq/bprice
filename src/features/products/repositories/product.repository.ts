@@ -25,6 +25,62 @@ function stripSkuTokens(name: string): string {
 }
 
 /**
+ * Sustantivos de categoría en español que una tienda puede omitir del nombre
+ * si ya es obvio por el tipo de producto (ej. Banifox lista "Logitech K270"
+ * sin la palabra "Teclado" que sí usa Tiendamia para el mismo producto) —
+ * verificado empíricamente. A diferencia de `stripSkuTokens` (códigos de
+ * tienda), esto arma una query más angosta (esencialmente marca + modelo)
+ * para buscadores que hacen match de frase/substring en vez de por palabra
+ * individual, donde una palabra de más rompe el match.
+ */
+const CATEGORY_NOISE_WORDS = new Set([
+  "teclado",
+  "teclados",
+  "mouse",
+  "mause",
+  "monitor",
+  "monitores",
+  "notebook",
+  "notebooks",
+  "laptop",
+  "laptops",
+  "celular",
+  "celulares",
+  "telefono",
+  "auriculares",
+  "parlante",
+  "parlantes",
+  "impresora",
+  "impresoras",
+  "camara",
+  "camaras",
+  "tablet",
+  "tablets",
+  "cargador",
+  "cargadores",
+])
+
+function stripCategoryWords(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter((token) => !CATEGORY_NOISE_WORDS.has(token.toLowerCase()))
+    .join(" ")
+}
+
+function dedupeHitsBySlug(hits: StoreSearchHit[]): StoreSearchHit[] {
+  const seen = new Set<string>()
+  const deduped: StoreSearchHit[] = []
+
+  for (const hit of hits) {
+    if (seen.has(hit.product.slug)) continue
+    seen.add(hit.product.slug)
+    deduped.push(hit)
+  }
+
+  return deduped
+}
+
+/**
  * Un slug de producto es namespaced por tienda (`<storeSlug>__<slugReal>`).
  * Este repository solo decide a qué provider delegar — el parseo del slug
  * real y el fetch en sí quedan enteramente del lado del provider.
@@ -44,13 +100,22 @@ class ProductRepository {
    * tienda no lo vuelve a traer (puede pasar; el match del grupo ancla
    * siempre debe existir). El matching en sí queda para la Action, no para
    * el repository.
+   *
+   * Se corren dos queries en paralelo — el nombre completo (sin SKU) y una
+   * versión angosta sin sustantivos de categoría — y se combinan los hits.
+   * Cubre tanto buscadores que necesitan el nombre completo como los que
+   * hacen match de frase y fallan si sobra una palabra que otra tienda omite.
    */
   async findOffersBySlug(slug: string): Promise<StoreSearchHit[] | null> {
     const anchor = await this.findBySlug(slug)
     if (!anchor) return null
 
-    const searchQuery = stripSkuTokens(anchor.product.name)
-    const secondRound = await searchAllProviders(searchQuery)
+    const fullQuery = stripSkuTokens(anchor.product.name)
+    const narrowQuery = stripCategoryWords(fullQuery)
+    const queries = narrowQuery && narrowQuery !== fullQuery ? [fullQuery, narrowQuery] : [fullQuery]
+
+    const results = await Promise.all(queries.map((query) => searchAllProviders(query)))
+    const secondRound = dedupeHitsBySlug(results.flat())
     const alreadyPresent = secondRound.some((hit) => hit.product.slug === anchor.product.slug)
 
     return alreadyPresent ? secondRound : [anchor, ...secondRound]

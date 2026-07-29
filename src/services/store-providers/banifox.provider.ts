@@ -32,6 +32,27 @@ function buildDetailUrl(artSlug: string): string {
   return `${BASE_URL}/p/${artSlug}/`
 }
 
+/**
+ * Clave de cache insensible al orden/capitalización de las palabras de la
+ * query: `findOffersBySlug` (ver `product.repository.ts`) vuelve a buscar en
+ * todas las tiendas con una query derivada del nombre del producto ancla,
+ * que casi siempre comparte las mismas palabras que la búsqueda original del
+ * listado pero no necesariamente en el mismo orden/caso ("Teclado Logitech
+ * K270" vs "logitech k270"). Sin esto, esa re-búsqueda sería un cache-miss
+ * seguro y dispararía un scrape de Playwright nuevo contra un sitio con
+ * challenge de Cloudflare — no siempre confiable request a request. Con
+ * tokens normalizados, si comparten las mismas palabras reusan el resultado
+ * ya scrapeado (y ya probado que funciona) en vez de arriesgar uno nuevo.
+ */
+function normalizeSearchCacheKey(query: string): string {
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .sort()
+    .join(" ")
+}
+
 /** "103,00" / "1.234,56" (convención es-UY: punto de miles, coma decimal) → 103 / 1234.56 */
 function parsePriceAmount(text: string): number | null {
   const cleaned = text
@@ -128,7 +149,7 @@ export class BanifoxProvider implements StoreProvider {
     const trimmedQuery = query.trim()
     if (!trimmedQuery) return []
 
-    const cacheKey = `banifox:search:${trimmedQuery.toLowerCase()}`
+    const cacheKey = `banifox:search:${normalizeSearchCacheKey(trimmedQuery)}`
 
     const hits = await scrapeWithBrowser(cacheKey, async (page) => {
       const allHits: StoreSearchHit[] = []

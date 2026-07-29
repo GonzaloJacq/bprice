@@ -147,17 +147,17 @@ producto consciente dado que no hay una fuente de identificadores exacta.
 - **Búsqueda y comparación real multi-tienda** para Thot Computación
   (`thot.provider.ts`, WooCommerce, `fetch` + `cheerio`), Banifox
   (`banifox.provider.ts`, detrás de Cloudflare — requiere browser headless,
-  ver `services/store-providers/lib/playwright-scrape.ts`) y Carlos
+  ver `services/store-providers/lib/playwright-scrape.ts`), Carlos
   Gutiérrez (`carlos-gutierrez.provider.ts`, API JSON propia con CORS
-  abierto, `fetch` simple). Las tres devuelven `StoreSearchHit[]` reales que
-  el matcher agrupa entre sí.
-- **Loi, Tienda Inglesa y Tiendamia quedan stub deliberadamente**, no por
-  falta de tiempo — cada archivo documenta el bloqueo real:
+  abierto, `fetch` simple) y Tiendamia (`tiendamia.provider.ts`, `fetch` +
+  `cheerio` contra su buscador propio `/search/<vendor>/<query>` — distinto
+  del buscador genérico de Magento, que no sirve para este catálogo). Las
+  cuatro devuelven `StoreSearchHit[]` reales que el matcher agrupa entre sí.
+- **Loi y Tienda Inglesa quedan stub deliberadamente**, no por falta de
+  tiempo — cada archivo documenta el bloqueo real:
   - Tienda Inglesa: su `robots.txt` prohíbe explícitamente crawlear su
     buscador (`/busqueda`); solo categorías/listados están permitidos, lo
     que requeriría un catálogo indexado (DB + cron) que no existe hoy.
-  - Tiendamia: su `robots.txt` prohíbe *todo* endpoint de datos (listados,
-    fichas, API) para cualquier user-agent. No hay vía respetuosa hoy.
   - Loi: su propia API interna (`?ctrl=X&act=Y`, la única fuente de datos
     de toda la SPA) está explícitamente Disallow para cualquier crawler
     estándar en su `robots.txt`. Ese mismo `robots.txt` además intenta

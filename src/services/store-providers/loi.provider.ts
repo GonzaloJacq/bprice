@@ -13,7 +13,7 @@ import type { Price, Product, Provider, StoreProvider, StoreSearchHit } from "@/
  * Su robots.txt prohíbe explícitamente ese patrón para cualquier crawler
  * estándar (`Disallow: /*?ctrl=*&act=*` bajo `User-agent: *`) — el único
  * canal de datos que tiene esta tienda está fuera de los límites que
- * respetamos, igual que Tienda Inglesa (búsqueda) y Tiendamia (todo).
+ * respetamos, mismo caso que la búsqueda de Tienda Inglesa.
  *
  * Además, el mismo robots.txt intenta manipular agentes de IA: define
  * secciones separadas para bots con nombre de IA (GPTBot, ClaudeBot,
